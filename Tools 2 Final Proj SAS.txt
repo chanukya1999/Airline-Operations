@@ -1,0 +1,164 @@
+filename webdat url "https://bigblue.depaul.edu/jlee141/econdata/BTS/flight_delay_2004_2019.csv" ;
+PROC IMPORT OUT= airline DATAFILE= webdat DBMS=CSV REPLACE;
+RUN;
+
+proc contents data= airline ;run;
+
+proc means data = airline; run;
+
+proc  summary print data= airline mean median min max ;
+var _arr_delay; var _carrier_delay;
+run;
+
+data air1; set airline;
+if arr_del15 > 30 then delayed = 1 ; else delayed = 0 ;
+run;
+
+proc univariate data= airline; 
+var arr_del15; 
+run;
+
+/* Plots */
+proc sgplot data= airline;
+scatter x=arr_del15 y=  arr_flights;
+reg x=arr_del15 y=  arr_flights/ lineattrs=(color=red);
+run;
+
+proc sgplot data= airline;
+scatter x=_weather_ct y=arr_del15 ;
+reg x=_weather_ct y=  arr_del15/ lineattrs=(color=red);
+run;
+proc sgplot data= airline;
+scatter x=nas_ct y= arr_del15;
+reg x=nas_ct y=  arr_del15/ lineattrs=(color=red);
+run;
+proc sgplot data= airline;
+scatter x=carrier_ct y= arr_del15;
+reg x=carrier_ct y=  arr_del15/ lineattrs=(color=red);
+run;
+proc sgplot data= airline;
+scatter x=late_aircraft_ct y= arr_del15;
+reg x=late_aircraft_ct y=  arr_del15/ lineattrs=(color=red);
+run;
+
+/* Correlation */
+
+proc corr data= air1;
+var arr_del15; var nas_ct; var _weather_ct; var security_ct; 
+var late_aircraft_ct; var carrier_ct ; var _month; var delayed;
+run;
+
+/* Anova Analysis */
+
+proc anova data= air1;
+class carrier_ct;
+model delayed= carrier_ct ;
+run;
+
+proc anova data= air1;
+class  nas_ct;
+model delayed= nas_ct  ;
+run;
+
+proc anova data= air1;
+class  late_aircraft_ct;
+model delayed= late_aircraft_ct  ;
+run;
+
+proc anova data= air1;
+class  security_ct;
+model delayed= security_ct ;
+run;
+
+proc anova data= air1;
+class  _weather_ct;
+model delayed= _weather_ct  ;
+run;
+
+/* Clsutering */
+
+proc fastclus data=air1 out=kmeandat maxclusters=4;
+var _month arr_del15 ;
+run;
+/* Simple Graph using K-means */
+proc sgplot data=kmeandat ;
+scatter y= arr_del15 x= _month / group=cluster ;
+styleattrs datalinepatterns=(dot dash longdash);
+run;
+
+proc sgplot data=kmeandat ;
+scatter y= arr_del15 x= _month  / group=cluster ;
+styleattrs datacontrastcolors=(blue red green)
+datalinepatterns=(dot dash longdash);
+reg  y= arr_del15 x= _month  / group=cluster;
+run;
+
+/*Regression*/
+
+proc reg data = air1 ;
+model delayed = nas_ct;
+run;	
+
+/* Spliting data */
+
+proc surveyselect data= air1  method=srs seed=1234 outall 
+     samprate=0.7 out= air_split;
+run;
+
+proc freq data=air_split; tables selected ; 
+ run;
+
+ data regdata ; set air_split ;
+   y = delayed ;
+   if selected = 0 then y = . ;
+run ;
+
+
+%let indep_var =  carrier_ct _weather_ct nas_ct security_ct late_aircraft_ct _month ;
+
+
+proc reg data=regdata;
+   model  y = &indep_var / selection = adjrsq   ; output out=r1(where=(y=.)) p=yhat1;
+   model  y = &indep_var / selection = stepwise ; output out=r2(where=(y=.)) p=yhat2;
+   model  y = carrier_ct  ; output out=r3(where=(y=.)) p=yhat3;
+run ;
+
+data allr ; merge r1 r2 r3  ;
+yorg = delayed;
+e1 = yorg - yhat1;
+e2 = yorg - yhat2;
+e3 = yorg - yhat3;
+
+rmse1 = ((e1)**2)**.5;
+rmse2 = ((e2)**2)**0.5 ; 
+rmse3 = ((e3)**2)**0.5 ; 
+
+mse1 = (e1)**2 ; 
+mse2 = (e2)**2 ; 
+mse3 = (e3)**2 ;
+
+mae1 = abs(e1) ; 
+mae2 = abs(e2) ; 
+mae3 = abs(e3) ;
+
+mpe1 = abs((e1)/yorg) ; 
+mpe2 = abs((e2)/yorg) ; 
+mpe3 = abs((e3)/yorg) ;
+run ;
+proc means data=allr n mean ; var rmse: mse: mae: mpe: ;  run ;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
